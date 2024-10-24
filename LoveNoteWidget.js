@@ -3,116 +3,114 @@ const FM = FileManager.local();
 const STORAGE_DIR = FM.joinPath(FM.documentsDirectory(), "love-notes");
 const HISTORY_FILE = FM.joinPath(STORAGE_DIR, "message-history.json");
 const MESSAGES_FILE = FM.joinPath(STORAGE_DIR, "message-library.json");
+const LIBRARY_STATE_FILE = FM.joinPath(STORAGE_DIR, "library-state.json");
 
 // Ensure storage directory exists
 if (!FM.fileExists(STORAGE_DIR)) {
     FM.createDirectory(STORAGE_DIR);
 }
 
-// Configuration - EDIT THESE TWO LINES
+// Configuration
 const config = {
-    phoneNumber: "+your-phone-number", // Format: +1234567890
-    openAIKey: "sk-your-openai-key", // Your OpenAI API key
+    phoneNumber: "your-phone-here", // Format: +1234567890
+    openAIKey: "your-api-key-here",
     location: {
         lat: your-latitude, // Your Latitude
         lon: your-longitude // Your Longitude
     },
     messageRotationCount: 20,
-    maxHistoryItems: 100
+    maxHistoryItems: 100,
+    refreshThreshold: 25 // Messages before AI refresh
 };
 
-// Message Categories
-const messageLibrary = {
+// Initial message library
+const defaultMessageLibrary = {
     timeOfDay: {
         morning: [
-            "Good morning, sunshine!",
-            "Starting my day thinking of you",
-            "Hope your morning is as beautiful as you",
-            "Sending you morning smiles",
-            "Rise and shine, gorgeous"
+            "Good morning, sunshine! ☀️",
+            "Starting my day thinking of you 🌅",
+            "Hope your morning is bright ✨",
+            "Rise and shine, beautiful 🌞",
+            "Morning thoughts of you 🌄"
         ],
         afternoon: [
-            "Hope your day is going well",
-            "Brightening your afternoon",
-            "Taking a moment to think of you",
-            "Making your day a little sweeter",
-            "Sending mid-day love"
+            "Brightening your afternoon ☀️",
+            "Sending mid-day love 💫",
+            "A little afternoon joy 🌟",
+            "Making your day sparkle ✨",
+            "Afternoon smile for you 🌞"
         ],
         evening: [
-            "Winding down and thinking of you",
-            "Hope your evening is peaceful",
-            "Sending you end-of-day love",
-            "Sweet dreams ahead",
-            "Wrapping up the day with thoughts of you"
+            "Sweet evening thoughts 🌙",
+            "Winding down thinking of you ⭐",
+            "Evening love note 🌆",
+            "Starlit thoughts of you 🌟",
+            "Peaceful evening wishes 🌙"
         ]
     },
-    romantic: [
-        "You mean everything to me",
-        "Every day with you is a gift",
-        "You're the best part of my story",
-        "My heart smiles when I think of you",
-        "You're my favorite thought",
-        "Life is beautiful because of you",
-        "You're my perfect match",
-        "Forever grateful for your love",
-        "You're my dream come true",
-        "My heart beats for you"
-    ],
-    playful: [
-        "You're my favorite notification 📱",
-        "Consider yourself virtually hugged 🤗",
-        "Loading... love.exe 💝",
-        "Warning: extreme cuteness ahead 🚨",
-        "Incoming cuddles! 🤗",
-        "Just spreading some joy your way",
-        "Consider this a digital kiss 😘",
-        "Here's your daily dose of love 💕",
-        "Beep boop - you're cute! 🤖",
-        "Achievement unlocked: made you smile! 🏆"
-    ],
-    deep: [
-        "You inspire me to be better every day",
-        "Your love makes everything possible",
-        "You're the answer to my prayers",
-        "Every moment with you is precious",
-        "You make my world complete",
-        "Our love story is my favorite",
-        "You're my safe harbor in any storm",
-        "Life with you is beautiful chaos",
-        "You're my best decision ever",
-        "Our love grows deeper each day"
-    ],
-    weather: {
-        clear: [
-            "As bright as this sunny day",
-            "Clear skies and clear thoughts of you",
-            "Sunshine reminds me of your smile"
-        ],
-        cloudy: [
-            "You brighten even the cloudiest day",
-            "Grey skies can't dim my love for you",
-            "Thinking warm thoughts of you"
-        ],
-        rainy: [
-            "You're my cozy thought on this rainy day",
-            "Rain or shine, you're on my mind",
-            "Perfect weather for cuddling"
-        ],
-        snowy: [
-            "Sending you warm thoughts in the snow",
-            "You melt my heart like snowflakes",
-            "Cold outside but warm thoughts of you"
-        ],
-        stormy: [
-            "You're my calm in every storm",
-            "Thunder reminds me of my heart when I see you",
-            "Weather's wild but my love is steady"
-        ]
-    },
-    emojis: ["❤️", "🥰", "😘", "💖", "💝", "😊", "✨", "🌟", "💫", "💕", "💞", "💓"]
+    emojis: {
+        hearts: ["❤️", "💖", "💝", "💕", "💓", "💗", "💞"],
+        faces: ["🥰", "😘", "☺️", "😊", "🤗"],
+        nature: ["✨", "🌟", "💫", "🌸", "🌺"],
+        weather: ["☀️", "🌤️", "⛅", "🌥️", "🌙"]
+    }
 };
 
-// Weather service class
+// Library State Management
+class LibraryStateManager {
+    constructor() {
+        this.state = this.loadState();
+    }
+
+    loadState() {
+        try {
+            if (FM.fileExists(LIBRARY_STATE_FILE)) {
+                return JSON.parse(FM.readString(LIBRARY_STATE_FILE));
+            }
+        } catch (error) {
+            console.log("Error loading library state:", error);
+        }
+        return {
+            useCount: 0,
+            lastRefresh: Date.now(),
+            messages: defaultMessageLibrary
+        };
+    }
+
+    saveState() {
+        FM.writeString(LIBRARY_STATE_FILE, JSON.stringify(this.state));
+    }
+
+    incrementUseCount() {
+        this.state.useCount++;
+        this.saveState();
+        console.log(`Message use count: ${this.state.useCount}`);
+    }
+
+    needsRefresh() {
+        return this.state.useCount >= config.refreshThreshold;
+    }
+
+    resetUseCount() {
+        this.state.useCount = 0;
+        this.state.lastRefresh = Date.now();
+        this.saveState();
+    }
+
+    updateMessages(newMessages) {
+        this.state.messages = {
+            ...this.state.messages,
+            ...newMessages
+        };
+        this.saveState();
+    }
+
+    getMessages() {
+        return this.state.messages;
+    }
+}
+
+// Weather service
 class WeatherService {
     constructor() {
         this.cache = null;
@@ -156,14 +154,14 @@ class WeatherService {
     getWeatherDescription(code, isDay) {
         const weatherCodes = {
             0: "clear",
-            1: "clear",
-            2: "cloudy",
+            1: "mostly clear",
+            2: "partly cloudy",
             3: "cloudy",
-            45: "cloudy",
-            48: "cloudy",
-            51: "rainy",
-            53: "rainy",
-            55: "rainy",
+            45: "foggy",
+            48: "foggy",
+            51: "drizzly",
+            53: "drizzly",
+            55: "drizzly",
             61: "rainy",
             63: "rainy",
             65: "rainy",
@@ -183,174 +181,150 @@ class WeatherService {
         return weatherCodes[code] || "clear";
     }
 }
-// Open AI integration
 
-class AIMessageGenerator {
-    constructor(openAIKey) {
-        this.openAIKey = openAIKey;
+// Message Generator
+class MessageGenerator {
+    constructor() {
+        this.weatherService = new WeatherService();
+        this.libraryState = new LibraryStateManager();
     }
 
-    async generateAIMessages(context) {
-        if (!this.openAIKey) {
-            console.log("No OpenAI key provided");
-            return [];
-        }
+    async refreshLibrary() {
+        if (!config.openAIKey || !this.libraryState.needsRefresh()) return false;
 
         try {
-            // Get current month for seasonal/holiday context
-            const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                          'July', 'August', 'September', 'October', 'November', 'December'];
-            const currentMonth = months[new Date().getMonth()];
-            
-            const prompt = `Generate 3 unique, romantic messages considering these details about Saint Marys, Kansas:
+            const weather = await this.weatherService.getCurrentWeather();
+            const hour = new Date().getHours();
+            const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
 
-Current Context:
-- Time: ${context.hour}:00 (${context.timeOfDay})
-- Weather: ${context.weather.description} at ${context.weather.temperature}°F
-- Month: ${currentMonth}
-- ${context.isWeekend ? 'Weekend' : 'Weekday'}
+            console.log("Refreshing message library with AI...");
 
-Local References:
-- St. Mary's Academy and College campus
-- The peaceful Kansas prairie
-- Small-town charm and community
-- Local landmarks like Mount Calvary Cemetery
-- Kansas weather patterns and beautiful sunsets
-- Downtown Saint Marys
+            const prompt = `Generate 5 new romantic messages for each time of day (morning, afternoon, evening) that match this style:
+                Example morning: "Good morning, sunshine! ☀️"
+                Example afternoon: "Brightening your afternoon 💫"
+                Example evening: "Sweet evening thoughts 🌙"
+                
+                Consider:
+                - Location: Saint Marys, Kansas
+                - Local references (prairie, campus, small town)
+                - Keep messages short and sweet
+                - Match the emotional tone of the examples
+                
+                Format response as JSON:
+                {
+                    "timeOfDay": {
+                        "morning": ["message1", "message2", ...],
+                        "afternoon": ["message1", "message2", ...],
+                        "evening": ["message1", "message2", ...]
+                    }
+                }`;
 
-Special Considerations:
-- Include references to current season and any upcoming holidays
-- Mention local activities appropriate for the weather
-- Reference Kansas nature, landscapes, or activities
-- If it's a nice day, maybe mention walking downtown or campus
-- If it's stormy/cold, perhaps reference staying cozy inside
-
-Make messages feel personal and natural, mixing in these elements subtly. Each message should be a complete thought, about 1-2 sentences long. Return them as a JSON array of strings.
-
-Example themes:
-- Watching sunset over the prairie together
-- Walking through downtown
-- College campus beauty in different seasons
-- Kansas weather and staying cozy
-- Local events or seasonal activities
-
-Return format: {"messages": ["message1", "message2", "message3"]}`;
-
-            const response = await fetch("https://api.openai.com/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${this.openAIKey}`
-                },
-                body: JSON.stringify({
-                    model: "gpt-3.5-turbo-1106",
-                    messages: [{
-                        role: "user",
-                        content: prompt
-                    }],
-                    response_format: { "type": "json_object" },
-                    temperature: 0.8
-                })
+            const request = new Request("https://api.openai.com/v1/chat/completions");
+            request.method = "POST";
+            request.headers = {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${config.openAIKey}`
+            };
+            request.body = JSON.stringify({
+                model: "gpt-3.5-turbo-1106",
+                messages: [{
+                    role: "system",
+                    content: "You are a helpful assistant that generates romantic messages matching a specific style and tone."
+                }, {
+                    role: "user",
+                    content: prompt
+                }],
+                response_format: { "type": "json_object" },
+                temperature: 0.7
             });
 
-            const data = await response.json();
+            const response = await request.loadJSON();
+            console.log("AI Response received");
             
-            if (data.error) {
-                console.error("OpenAI Error:", data.error);
-                return [];
+            if (response.error) {
+                console.error("OpenAI Error:", response.error);
+                return false;
             }
 
-            const content = data.choices[0].message.content;
-            const parsed = JSON.parse(content);
+            const content = response.choices[0].message.content;
+            const newMessages = JSON.parse(content);
             
-            // Log success for debugging
-            console.log("Successfully generated AI messages");
+            // Update library with new messages
+            this.libraryState.updateMessages({
+                timeOfDay: {
+                    morning: [...defaultMessageLibrary.timeOfDay.morning, ...newMessages.timeOfDay.morning],
+                    afternoon: [...defaultMessageLibrary.timeOfDay.afternoon, ...newMessages.timeOfDay.afternoon],
+                    evening: [...defaultMessageLibrary.timeOfDay.evening, ...newMessages.timeOfDay.evening]
+                }
+            });
             
-            return parsed.messages || [];
-
-        } catch (error) {
-            console.error("AI Generation Error:", error);
+            this.libraryState.resetUseCount();
+            console.log("Message library refreshed successfully");
             
-            // Show error notification
+            // Show refresh notification
             const notification = new Notification();
-            notification.title = "AI Message Generation";
-            notification.body = "Falling back to preset messages";
+            notification.title = "Message Library Refreshed ✨";
+            notification.body = "Added new romantic messages to the collection";
             notification.schedule();
             
-            return [];
+            return true;
+        } catch (error) {
+            console.error("Library Refresh Error:", error);
+            return false;
         }
     }
-}
 
-// Modify the generateMessage function to incorporate AI messages
-async function generateMessage(messageHistory) {
-    const weather = new WeatherService();
-    const currentWeather = await weather.getCurrentWeather();
-    const hour = new Date().getHours();
-    
-    let timeCategory;
-    if (hour < 12) timeCategory = "morning";
-    else if (hour < 17) timeCategory = "afternoon";
-    else timeCategory = "evening";
-    
-    // Try to get AI messages first
-    const aiGenerator = new AIMessageGenerator(config.openAIKey);
-    const context = {
-        timeOfDay: timeCategory,
-        hour: hour,
-        weather: currentWeather,
-        isWeekend: [0, 6].includes(new Date().getDay())
-    };
-    
-    const aiMessages = await aiGenerator.generateAIMessages(context);
-    
-    // Combine AI and preset messages
-    const allMessages = [
-        ...aiMessages,
-        ...messageLibrary.romantic,
-        ...messageLibrary.playful,
-        ...messageLibrary.deep
-    ];
-
-    function getRandomItem(array) {
+    getRandomItem(array) {
         return array[Math.floor(Math.random() * array.length)];
     }
-    
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    while (attempts < maxAttempts) {
-        // Prioritize AI messages if available
-        const mainMessage = aiMessages.length > 0 && Math.random() > 0.3 
-            ? getRandomItem(aiMessages) 
-            : getRandomItem(allMessages);
-            
-        const emoji = getRandomItem(messageLibrary.emojis);
-        
-        // Sometimes add time-of-day or weather context
-        const addContext = Math.random() > 0.7;
-        const contextMessage = addContext 
-            ? getRandomItem([
-                getRandomItem(messageLibrary.timeOfDay[timeCategory]),
-                getRandomItem(messageLibrary.weather[currentWeather.description])
-              ])
-            : '';
-            
-        const message = contextMessage 
-            ? `${contextMessage} - ${mainMessage} ${emoji}`
-            : `${mainMessage} ${emoji}`;
-        
-        if (!messageHistory.wasRecentlyUsed(message)) {
-            return message;
+
+    combineEmojis() {
+        const count = Math.floor(Math.random() * 2) + 1;
+        const messages = this.libraryState.getMessages();
+        const types = Object.keys(messages.emojis);
+        let emojis = [];
+        for (let i = 0; i < count; i++) {
+            const type = this.getRandomItem(types);
+            emojis.push(this.getRandomItem(messages.emojis[type]));
+        }
+        return emojis.join("");
+    }
+
+    async generateMessage(messageHistory) {
+        // Check if library needs refresh
+        if (this.libraryState.needsRefresh()) {
+            console.log("Message threshold reached, attempting refresh");
+            await this.refreshLibrary();
         }
         
-        attempts++;
+        const hour = new Date().getHours();
+        const timeKey = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+        const messages = this.libraryState.getMessages();
+        
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        while (attempts < maxAttempts) {
+            const timeMessage = this.getRandomItem(messages.timeOfDay[timeKey]);
+            const emoji = this.combineEmojis();
+            const message = `${timeMessage} ${emoji}`;
+            
+            if (!messageHistory.wasRecentlyUsed(message)) {
+                this.libraryState.incrementUseCount();
+                return message;
+            }
+            
+            attempts++;
+        }
+        
+        // Final fallback
+        const fallbackMessage = `Thinking of you ${this.combineEmojis()}`;
+        this.libraryState.incrementUseCount();
+        return fallbackMessage;
     }
-    
-    // Fallback message
-    return `${getRandomItem(messageLibrary.romantic)} ${getRandomItem(messageLibrary.emojis)}`;
 }
-// Message history management
+
+// Message History Management
 class MessageHistory {
     constructor() {
         this.history = this.loadHistory();
@@ -388,60 +362,7 @@ class MessageHistory {
     }
 }
 
-// Generate a message combining different elements
-async function generateMessage(messageHistory) {
-    const weather = new WeatherService();
-    const currentWeather = await weather.getCurrentWeather();
-    const hour = new Date().getHours();
-    
-    // Determine time of day
-    let timeCategory;
-    if (hour < 12) timeCategory = "morning";
-    else if (hour < 17) timeCategory = "afternoon";
-    else timeCategory = "evening";
-    
-    // Get random items from each category
-    function getRandomItem(array) {
-        return array[Math.floor(Math.random() * array.length)];
-    }
-    
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    while (attempts < maxAttempts) {
-        // Build message components
-        const timeMessage = getRandomItem(messageLibrary.timeOfDay[timeCategory]);
-        const weatherMessage = getRandomItem(messageLibrary.weather[currentWeather.description]);
-        const mainMessage = getRandomItem([
-            ...messageLibrary.romantic,
-            ...messageLibrary.playful,
-            ...messageLibrary.deep
-        ]);
-        const emoji = getRandomItem(messageLibrary.emojis);
-        
-        // Combine components randomly
-        const messageTemplates = [
-            `${timeMessage} ${emoji}`,
-            `${weatherMessage} ${emoji}`,
-            `${mainMessage} ${emoji}`,
-            `${timeMessage} - ${mainMessage} ${emoji}`,
-            `${weatherMessage} - ${mainMessage} ${emoji}`
-        ];
-        
-        const message = getRandomItem(messageTemplates);
-        
-        if (!messageHistory.wasRecentlyUsed(message)) {
-            return message;
-        }
-        
-        attempts++;
-    }
-    
-    // Fallback message if all attempts failed
-    return `${getRandomItem(messageLibrary.romantic)} ${getRandomItem(messageLibrary.emojis)}`;
-}
-
-// Create widget
+// Widget Creation
 function createWidget() {
     const widget = new ListWidget();
     
@@ -492,7 +413,9 @@ async function sendMessage() {
     
     try {
         const messageHistory = new MessageHistory();
-        const message = await generateMessage(messageHistory);
+        const messageGen = new MessageGenerator();
+        
+        const message = await messageGen.generateMessage(messageHistory);
         
         const msg = new Message();
         msg.body = message;
@@ -526,6 +449,8 @@ async function run() {
     } else {
         // Normal widget setup
         const widget = createWidget();
+        
+        // Configure widget tap action
         widget.url = 'scriptable:///run/' + Script.name() + '?run=sendMessage';
         
         if (config.widgetFamily === 'small') {
